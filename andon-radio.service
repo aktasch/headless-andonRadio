@@ -1,0 +1,14 @@
+[Unit]
+Description=Andon FM headless radio player
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/usr/bin/python3 /home/pi/andon-radio/radio.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
