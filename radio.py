@@ -14,6 +14,11 @@ Wiring (BCM numbering, buttons wired between the GPIO pin and GND):
   GPIO17 -> station button
   GPIO27 -> power button
 Internal pull-ups are enabled, no external resistors needed.
+
+Optional SSD1306 OLED status display (128x64, I2C, 4-pin):
+  VCC -> 3V3, GND -> GND, SDA -> GPIO2 (SDA), SCL -> GPIO3 (SCL)
+Shows power state and the current/selected station. If the display
+isn't connected or fails to initialize, the radio runs normally without it.
 """
 
 import json
@@ -62,6 +67,12 @@ MPV_BASE_ARGS = [
 WATCHDOG_INTERVAL = 3      # seconds between mpv health checks
 RESTART_BACKOFF_MAX = 30   # cap for reconnect backoff
 
+# Optional SSD1306 OLED status display (set to False to disable entirely).
+ENABLE_DISPLAY = True
+DISPLAY_I2C_PORT = 1
+DISPLAY_I2C_ADDRESS = 0x3C
+DISPLAY_REFRESH_INTERVAL = 1   # seconds between display redraws
+
 
 # ---------------------------------------------------------------------------
 # Player
@@ -74,6 +85,7 @@ class Radio:
         self.powered = True
         self.station_idx = 0
         self.backoff = 1
+        self.display = None
         self._load_state()
 
     # -- state persistence --------------------------------------------------
@@ -165,12 +177,38 @@ class Radio:
                                      or self.proc.poll() is not None):
                     self._start_mpv()
 
+    # -- display --------------------------------------------------------
+
+    def display_loop(self, device):
+        """Periodically redraw the OLED with power state and station name."""
+        from luma.core.render import canvas
+        from PIL import ImageFont
+
+        font = ImageFont.load_default()
+        last_state = None
+        while True:
+            with self.lock:
+                state = (self.powered, STATIONS[self.station_idx][0])
+            if state != last_state:
+                power_text = "ON" if state[0] else "OFF"
+                station_text = state[1]
+                with canvas(device) as draw:
+                    draw.text((0, 0), power_text, font=font, fill="white")
+                    draw.text((0, 16), station_text, font=font, fill="white")
+                last_state = state
+            time.sleep(DISPLAY_REFRESH_INTERVAL)
+
     # -- shutdown -----------------------------------------------------------
 
     def shutdown(self, *_):
         print("shutting down", flush=True)
         with self.lock:
             self._stop_mpv()
+            if self.display is not None:
+                try:
+                    self.display.clear()
+                except Exception:
+                    pass
         sys.exit(0)
 
 
@@ -192,6 +230,18 @@ def main():
             radio._start_mpv()
 
     threading.Thread(target=radio.watchdog, daemon=True).start()
+
+    if ENABLE_DISPLAY:
+        try:
+            from luma.core.interface.serial import i2c
+            from luma.oled.device import ssd1306
+
+            serial = i2c(port=DISPLAY_I2C_PORT, address=DISPLAY_I2C_ADDRESS)
+            radio.display = ssd1306(serial)
+            threading.Thread(target=radio.display_loop,
+                              args=(radio.display,), daemon=True).start()
+        except Exception as e:
+            print(f"warn: display unavailable: {e}", flush=True)
 
     print("andon-radio ready. station button: GPIO"
           f"{STATION_BUTTON_PIN}, power button: GPIO{POWER_BUTTON_PIN}",

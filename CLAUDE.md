@@ -24,6 +24,11 @@ object guarded by `self.lock`:
 - **Watchdog thread**: `Radio.watchdog()` runs forever in a daemon thread, checking
   every `WATCHDOG_INTERVAL` seconds whether mpv died while `powered` is true, and
   restarting it with exponential backoff (capped at `RESTART_BACKOFF_MAX`).
+- **Display thread** (optional): `Radio.display_loop()` runs in a daemon thread and
+  redraws a 128x64 SSD1306 I2C OLED (via `luma.oled`) with the current power state
+  and station name whenever either changes. Controlled by `ENABLE_DISPLAY`; if the
+  OLED isn't connected or fails to initialize, a warning is logged and the radio
+  runs normally without it.
 
 State (current station index + power on/off) persists to
 `~/.andon-radio-state.json` via `_save_state`/`_load_state` so it survives reboots.
@@ -42,7 +47,12 @@ python3 radio.py
 
 This requires `mpv` and `python3-gpiozero` installed, and will fail outside of a
 Pi (or any Linux box) without GPIO hardware unless gpiozero's mock pin factory is
-configured. On real hardware, deploy and check logs with:
+configured. The optional OLED display requires `luma.oled`, `luma.core`, and
+`pillow`. On Debian Bookworm's externally-managed Python, install with
+`pip install --user --break-system-packages luma.oled luma.core pillow`, plus
+an I2C bus enabled via `raspi-config`; if unavailable, set
+`ENABLE_DISPLAY = False` or just ignore the startup warning.
+On real hardware, deploy and check logs with:
 
 ```bash
 sudo systemctl restart andon-radio
@@ -56,3 +66,5 @@ journalctl -u andon-radio -f
 - `AUDIO_DEVICE` — mpv ALSA device override (e.g. `"alsa/hw:1,0"` for a USB DAC);
   `None` uses the system default.
 - `MPV_BASE_ARGS` — base mpv invocation; reconnect/caching behavior lives here.
+- `ENABLE_DISPLAY`, `DISPLAY_I2C_PORT`, `DISPLAY_I2C_ADDRESS`,
+  `DISPLAY_REFRESH_INTERVAL` — OLED status display settings.
