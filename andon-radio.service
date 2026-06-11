@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=aktasch
+WorkingDirectory=/home/aktasch/andon-radio
 ExecStart=/usr/bin/python3 /home/aktasch/andon-radio/radio.py
 Restart=always
 RestartSec=5
