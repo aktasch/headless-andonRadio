@@ -56,9 +56,9 @@ Change the pins at the top of radio.py if your layout differs.
 sudo apt update
 sudo apt install -y mpv python3-gpiozero
 
-mkdir -p /home/pi/andon-radio
-cp radio.py /home/pi/andon-radio/
-chmod +x /home/pi/andon-radio/radio.py
+mkdir -p /home/aktasch/andon-radio
+cp radio.py /home/aktasch/andon-radio/
+chmod +x /home/aktasch/andon-radio/radio.py
 
 sudo cp andon-radio.service /etc/systemd/system/
 sudo systemctl daemon-reload
