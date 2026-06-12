@@ -188,8 +188,6 @@ class Radio:
         from luma.core.render import canvas
         from PIL import ImageFont
 
-        print(f"display: thread started, size {device.width}x{device.height}",
-              flush=True)
         font = ImageFont.load_default()
         last_state = None
         while True:
@@ -202,8 +200,6 @@ class Radio:
                     with canvas(device) as draw:
                         draw.text((0, 0), power_text, font=font, fill="white")
                         draw.text((0, 16), station_text, font=font, fill="white")
-                    print(f"display: drew {power_text!r} / {station_text!r}",
-                          flush=True)
                     last_state = state
                 except Exception as e:
                     print(f"warn: display draw failed: {e}", flush=True)
