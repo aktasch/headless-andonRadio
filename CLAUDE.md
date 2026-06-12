@@ -25,10 +25,11 @@ object guarded by `self.lock`:
   every `WATCHDOG_INTERVAL` seconds whether mpv died while `powered` is true, and
   restarting it with exponential backoff (capped at `RESTART_BACKOFF_MAX`).
 - **Display thread** (optional): `Radio.display_loop()` runs in a daemon thread and
-  redraws a 128x64 SSD1306 I2C OLED (via `luma.oled`) with the current power state
-  and station name whenever either changes. Controlled by `ENABLE_DISPLAY`; if the
-  OLED isn't connected or fails to initialize, a warning is logged and the radio
-  runs normally without it.
+  redraws a 128x64 SSD1306 I2C OLED (via `luma.oled`) with the current power state,
+  station name, and now-playing track whenever any of them change. Now-playing info
+  comes from `_query_now_playing()`, which queries mpv's IPC socket (`MPV_SOCKET`).
+  Controlled by `ENABLE_DISPLAY`; if the OLED isn't connected or fails to initialize,
+  a warning is logged and the radio runs normally without it.
 
 State (current station index + power on/off) persists to
 `~/.andon-radio-state.json` via `_save_state`/`_load_state` so it survives reboots.
@@ -66,8 +67,10 @@ journalctl -u andon-radio -f
 - `AUDIO_DEVICE` — mpv ALSA device override (e.g. `"alsa/hw:1,0"` for a USB DAC);
   `None` uses the system default.
 - `MPV_BASE_ARGS` — base mpv invocation; reconnect/caching behavior lives here.
+- `MPV_SOCKET` — path to mpv's `--input-ipc-server` socket, used by
+  `_query_now_playing()` and the standalone `andon-radio-now` script.
 - `ENABLE_DISPLAY`, `DISPLAY_I2C_PORT`, `DISPLAY_I2C_ADDRESS`,
-  `DISPLAY_REFRESH_INTERVAL`, `DISPLAY_DRIVER` — OLED status display settings.
-  `DISPLAY_DRIVER` is `"ssd1306"` or `"sh1106"` — many cheap 0.96" 4-pin I2C
-  boards sold as SSD1306 are actually SH1106 controllers and stay blank with
-  the wrong driver.
+  `DISPLAY_REFRESH_INTERVAL`, `DISPLAY_DRIVER`, `MAX_LINE_CHARS` — OLED status
+  display settings. `DISPLAY_DRIVER` is `"ssd1306"` or `"sh1106"` — many cheap
+  0.96" 4-pin I2C boards sold as SSD1306 are actually SH1106 controllers and
+  stay blank with the wrong driver.
