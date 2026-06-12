@@ -79,7 +79,9 @@ RESTART_BACKOFF_MAX = 30   # cap for reconnect backoff
 ENABLE_DISPLAY = True
 DISPLAY_I2C_PORT = 1
 DISPLAY_I2C_ADDRESS = 0x3C
-DISPLAY_REFRESH_INTERVAL = 1   # seconds between display redraws
+DISPLAY_REFRESH_INTERVAL = 0.3   # seconds between display ticks / scroll steps
+NOW_PLAYING_POLL_INTERVAL = 5.0  # seconds between mpv now-playing queries
+SCROLL_PAUSE_SECONDS = 5         # pause at start/end of a scrolling track title
 # Controller driver: "ssd1306" or "sh1106". Many cheap 0.96" 4-pin I2C
 # boards labeled SSD1306 actually use an SH1106 controller; if the screen
 # stays blank with "ssd1306", try "sh1106".
@@ -219,28 +221,77 @@ class Radio:
     # -- display --------------------------------------------------------
 
     def display_loop(self, device):
-        """Periodically redraw the OLED with power state, station, and track."""
+        """Periodically redraw the OLED with power state, station, artist,
+        and track name.
+
+        The now-playing title is split on the first " - " into artist
+        (line 3, static, truncated) and track name (line 4, scrolling).
+        The track name scrolls horizontally if longer than MAX_LINE_CHARS,
+        pausing at the start and end of each pass for SCROLL_PAUSE_SECONDS.
+        """
         from luma.core.render import canvas
         from PIL import ImageFont
 
         font = ImageFont.load_default()
-        last_state = None
+        last_drawn = None
+        track_title = ""
+        artist_text = ""
+        track_name = ""
+        last_poll = 0
+        scroll_pos = 0
+        pause_until = 0
         while True:
+            now = time.monotonic()
             with self.lock:
                 powered, station_name = self.powered, STATIONS[self.station_idx][0]
-            now_playing = self._query_now_playing() if powered else None
-            track_text = now_playing or ""
-            if len(track_text) > MAX_LINE_CHARS:
-                track_text = track_text[:MAX_LINE_CHARS] + "..."
-            state = (powered, station_name, track_text)
-            if state != last_state:
+
+            if powered and now - last_poll >= NOW_PLAYING_POLL_INTERVAL:
+                new_title = self._query_now_playing() or ""
+                if new_title != track_title:
+                    track_title = new_title
+                    if " - " in track_title:
+                        artist, track_name = track_title.split(" - ", 1)
+                    else:
+                        artist, track_name = "", track_title
+                    if len(artist) > MAX_LINE_CHARS:
+                        artist_text = artist[:MAX_LINE_CHARS - 3] + "..."
+                    else:
+                        artist_text = artist
+                    scroll_pos = 0
+                    pause_until = now + SCROLL_PAUSE_SECONDS
+                last_poll = now
+            elif not powered:
+                track_title = ""
+                artist_text = ""
+                track_name = ""
+                last_poll = 0
+                scroll_pos = 0
+                pause_until = 0
+
+            if len(track_name) <= MAX_LINE_CHARS:
+                track_text = track_name
+            else:
+                track_text = track_name[scroll_pos:scroll_pos + MAX_LINE_CHARS]
+                max_pos = len(track_name) - MAX_LINE_CHARS
+                if now >= pause_until:
+                    if scroll_pos >= max_pos:
+                        scroll_pos = 0
+                        pause_until = now + SCROLL_PAUSE_SECONDS
+                    else:
+                        scroll_pos += 1
+                        if scroll_pos >= max_pos:
+                            pause_until = now + SCROLL_PAUSE_SECONDS
+
+            state = (powered, station_name, artist_text, track_text)
+            if state != last_drawn:
                 power_text = "ON" if powered else "OFF"
                 try:
                     with canvas(device) as draw:
                         draw.text((0, 0), power_text, font=font, fill="white")
                         draw.text((0, 16), station_name, font=font, fill="white")
-                        draw.text((0, 32), track_text, font=font, fill="white")
-                    last_state = state
+                        draw.text((0, 32), artist_text, font=font, fill="white")
+                        draw.text((0, 48), track_text, font=font, fill="white")
+                    last_drawn = state
                 except Exception as e:
                     print(f"warn: display draw failed: {e}", flush=True)
             time.sleep(DISPLAY_REFRESH_INTERVAL)

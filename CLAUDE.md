@@ -25,11 +25,16 @@ object guarded by `self.lock`:
   every `WATCHDOG_INTERVAL` seconds whether mpv died while `powered` is true, and
   restarting it with exponential backoff (capped at `RESTART_BACKOFF_MAX`).
 - **Display thread** (optional): `Radio.display_loop()` runs in a daemon thread and
-  redraws a 128x64 SSD1306 I2C OLED (via `luma.oled`) with the current power state,
-  station name, and now-playing track whenever any of them change. Now-playing info
-  comes from `_query_now_playing()`, which queries mpv's IPC socket (`MPV_SOCKET`).
-  Controlled by `ENABLE_DISPLAY`; if the OLED isn't connected or fails to initialize,
-  a warning is logged and the radio runs normally without it.
+  redraws a 128x64 SSD1306 I2C OLED (via `luma.oled`) across four lines: power
+  state, station name, artist, and track name. Now-playing info comes from
+  `_query_now_playing()`, which queries mpv's IPC socket (`MPV_SOCKET`) every
+  `NOW_PLAYING_POLL_INTERVAL` seconds and is split on the first `" - "` into
+  artist (line 3, static, truncated if over `MAX_LINE_CHARS`) and track name
+  (line 4). Track names longer than `MAX_LINE_CHARS` scroll horizontally (one
+  character per `DISPLAY_REFRESH_INTERVAL` tick), pausing for
+  `SCROLL_PAUSE_SECONDS` at the start and end of each pass. Controlled by
+  `ENABLE_DISPLAY`; if the OLED isn't connected or fails to initialize, a
+  warning is logged and the radio runs normally without it.
 
 State (current station index + power on/off) persists to
 `~/.andon-radio-state.json` via `_save_state`/`_load_state` so it survives reboots.
@@ -70,7 +75,8 @@ journalctl -u andon-radio -f
 - `MPV_SOCKET` — path to mpv's `--input-ipc-server` socket, used by
   `_query_now_playing()` and the standalone `andon-radio-now` script.
 - `ENABLE_DISPLAY`, `DISPLAY_I2C_PORT`, `DISPLAY_I2C_ADDRESS`,
-  `DISPLAY_REFRESH_INTERVAL`, `DISPLAY_DRIVER`, `MAX_LINE_CHARS` — OLED status
-  display settings. `DISPLAY_DRIVER` is `"ssd1306"` or `"sh1106"` — many cheap
-  0.96" 4-pin I2C boards sold as SSD1306 are actually SH1106 controllers and
-  stay blank with the wrong driver.
+  `DISPLAY_REFRESH_INTERVAL`, `NOW_PLAYING_POLL_INTERVAL`, `SCROLL_PAUSE_SECONDS`,
+  `DISPLAY_DRIVER`, `MAX_LINE_CHARS` — OLED status display settings.
+  `DISPLAY_DRIVER` is `"ssd1306"` or `"sh1106"` — many cheap 0.96" 4-pin I2C
+  boards sold as SSD1306 are actually SH1106 controllers and stay blank with
+  the wrong driver.
