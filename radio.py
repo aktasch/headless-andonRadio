@@ -82,6 +82,7 @@ DISPLAY_I2C_ADDRESS = 0x3C
 DISPLAY_REFRESH_INTERVAL = 0.3   # seconds between display ticks / scroll steps
 NOW_PLAYING_POLL_INTERVAL = 5.0  # seconds between mpv now-playing queries
 SCROLL_PAUSE_SECONDS = 5         # pause at start/end of a scrolling track title
+DISPLAY_REINIT_BACKOFF = 2       # seconds to wait after a failed re-init attempt
 # Controller driver: "ssd1306" or "sh1106". Many cheap 0.96" 4-pin I2C
 # boards labeled SSD1306 actually use an SH1106 controller; if the screen
 # stays blank with "ssd1306", try "sh1106".
@@ -220,6 +221,16 @@ class Radio:
 
     # -- display --------------------------------------------------------
 
+    @staticmethod
+    def _create_display_device():
+        """Construct a fresh OLED device object (raises on failure)."""
+        from luma.core.interface.serial import i2c
+        from luma.oled.device import sh1106, ssd1306
+
+        device_cls = sh1106 if DISPLAY_DRIVER == "sh1106" else ssd1306
+        serial = i2c(port=DISPLAY_I2C_PORT, address=DISPLAY_I2C_ADDRESS)
+        return device_cls(serial)
+
     def display_loop(self, device):
         """Periodically redraw the OLED with power state, station, artist,
         and track name.
@@ -294,6 +305,13 @@ class Radio:
                     last_drawn = state
                 except Exception as e:
                     print(f"warn: display draw failed: {e}", flush=True)
+                    try:
+                        device = self._create_display_device()
+                        self.display = device
+                        last_drawn = None
+                    except Exception as e2:
+                        print(f"warn: display re-init failed: {e2}", flush=True)
+                        time.sleep(DISPLAY_REINIT_BACKOFF)
             time.sleep(DISPLAY_REFRESH_INTERVAL)
 
     # -- shutdown -----------------------------------------------------------
@@ -331,12 +349,7 @@ def main():
 
     if ENABLE_DISPLAY:
         try:
-            from luma.core.interface.serial import i2c
-            from luma.oled.device import sh1106, ssd1306
-
-            device_cls = sh1106 if DISPLAY_DRIVER == "sh1106" else ssd1306
-            serial = i2c(port=DISPLAY_I2C_PORT, address=DISPLAY_I2C_ADDRESS)
-            radio.display = device_cls(serial)
+            radio.display = radio._create_display_device()
             threading.Thread(target=radio.display_loop,
                               args=(radio.display,), daemon=True).start()
         except Exception as e:

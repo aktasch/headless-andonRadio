@@ -34,7 +34,10 @@ object guarded by `self.lock`:
   character per `DISPLAY_REFRESH_INTERVAL` tick), pausing for
   `SCROLL_PAUSE_SECONDS` at the start and end of each pass. Controlled by
   `ENABLE_DISPLAY`; if the OLED isn't connected or fails to initialize, a
-  warning is logged and the radio runs normally without it.
+  warning is logged and the radio runs normally without it. If a draw call
+  fails (e.g. a transient I2C error leaves the bus handle unusable), the
+  device is re-initialized via `_create_display_device()`; if re-init also
+  fails, it retries after `DISPLAY_REINIT_BACKOFF` seconds.
 
 State (current station index + power on/off) persists to
 `~/.andon-radio-state.json` via `_save_state`/`_load_state` so it survives reboots.
@@ -76,7 +79,7 @@ journalctl -u andon-radio -f
   `_query_now_playing()` and the standalone `andon-radio-now` script.
 - `ENABLE_DISPLAY`, `DISPLAY_I2C_PORT`, `DISPLAY_I2C_ADDRESS`,
   `DISPLAY_REFRESH_INTERVAL`, `NOW_PLAYING_POLL_INTERVAL`, `SCROLL_PAUSE_SECONDS`,
-  `DISPLAY_DRIVER`, `MAX_LINE_CHARS` — OLED status display settings.
-  `DISPLAY_DRIVER` is `"ssd1306"` or `"sh1106"` — many cheap 0.96" 4-pin I2C
-  boards sold as SSD1306 are actually SH1106 controllers and stay blank with
-  the wrong driver.
+  `DISPLAY_REINIT_BACKOFF`, `DISPLAY_DRIVER`, `MAX_LINE_CHARS` — OLED status
+  display settings. `DISPLAY_DRIVER` is `"ssd1306"` or `"sh1106"` — many cheap
+  0.96" 4-pin I2C boards sold as SSD1306 are actually SH1106 controllers and
+  stay blank with the wrong driver.
