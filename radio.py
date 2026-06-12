@@ -2,9 +2,10 @@
 """
 Headless Raspberry Pi radio player for Andon FM (https://andonlabs.com/radio).
 
-Two GPIO buttons:
+Three GPIO buttons:
   - STATION button: cycles through the four stations
   - POWER button:   toggles playback on/off
+  - RESTART button: restarts the andon-radio systemd service
 
 Playback is handled by mpv as a subprocess. The script watches mpv and
 restarts it if the stream drops while the radio is "on". The last station
@@ -13,7 +14,13 @@ and power state survive reboots via a small state file.
 Wiring (BCM numbering, buttons wired between the GPIO pin and GND):
   GPIO17 -> station button
   GPIO27 -> power button
+  GPIO22 -> restart button
 Internal pull-ups are enabled, no external resistors needed.
+
+The restart button runs `sudo systemctl restart andon-radio`. This requires
+a passwordless sudo rule for the service user, e.g. in
+/etc/sudoers.d/andon-radio:
+  aktasch ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart andon-radio
 
 Optional SSD1306 OLED status display (128x64, I2C, 4-pin):
   VCC -> 3V3, GND -> GND, SDA -> GPIO2 (SDA), SCL -> GPIO3 (SCL)
@@ -49,6 +56,7 @@ STATIONS = [
 
 STATION_BUTTON_PIN = 17   # BCM
 POWER_BUTTON_PIN = 27     # BCM
+RESTART_BUTTON_PIN = 22   # BCM
 DEBOUNCE_SECONDS = 0.05
 
 STATE_FILE = Path.home() / ".andon-radio-state.json"
@@ -171,6 +179,11 @@ class Radio:
             else:
                 print("power: off", flush=True)
                 self._stop_mpv()
+
+    @staticmethod
+    def restart_service():
+        print("restarting andon-radio service", flush=True)
+        subprocess.Popen(["sudo", "systemctl", "restart", "andon-radio"])
 
     # -- watchdog -----------------------------------------------------------
 
@@ -335,8 +348,11 @@ def main():
                          bounce_time=DEBOUNCE_SECONDS)
     power_btn = Button(POWER_BUTTON_PIN, pull_up=True,
                        bounce_time=DEBOUNCE_SECONDS)
+    restart_btn = Button(RESTART_BUTTON_PIN, pull_up=True,
+                         bounce_time=DEBOUNCE_SECONDS)
     station_btn.when_pressed = radio.next_station
     power_btn.when_pressed = radio.toggle_power
+    restart_btn.when_pressed = radio.restart_service
 
     signal.signal(signal.SIGTERM, radio.shutdown)
     signal.signal(signal.SIGINT, radio.shutdown)
@@ -356,7 +372,8 @@ def main():
             print(f"warn: display unavailable: {e}", flush=True)
 
     print("andon-radio ready. station button: GPIO"
-          f"{STATION_BUTTON_PIN}, power button: GPIO{POWER_BUTTON_PIN}",
+          f"{STATION_BUTTON_PIN}, power button: GPIO{POWER_BUTTON_PIN}, "
+          f"restart button: GPIO{RESTART_BUTTON_PIN}",
           flush=True)
     signal.pause()
 

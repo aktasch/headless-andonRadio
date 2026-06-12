@@ -18,9 +18,11 @@ object guarded by `self.lock`:
 - **Playback**: mpv runs as a subprocess (`_start_mpv`/`_stop_mpv`) with `--no-video`
   and stream-reconnect flags. Station list and stream URLs live in the `STATIONS`
   constant at the top of the file.
-- **Input**: two gpiozero `Button`s (BCM pins, configured via `STATION_BUTTON_PIN`
-  and `POWER_BUTTON_PIN`) drive `next_station()` (cycle stations) and `toggle_power()`
-  (start/stop playback without powering off the Pi).
+- **Input**: three gpiozero `Button`s (BCM pins, configured via `STATION_BUTTON_PIN`,
+  `POWER_BUTTON_PIN`, and `RESTART_BUTTON_PIN`) drive `next_station()` (cycle
+  stations), `toggle_power()` (start/stop playback without powering off the Pi),
+  and `restart_service()` (runs `sudo systemctl restart andon-radio` to fully
+  restart the process — requires a passwordless sudo rule for that exact command).
 - **Watchdog thread**: `Radio.watchdog()` runs forever in a daemon thread, checking
   every `WATCHDOG_INTERVAL` seconds whether mpv died while `powered` is true, and
   restarting it with exponential backoff (capped at `RESTART_BACKOFF_MAX`).
@@ -71,7 +73,8 @@ journalctl -u andon-radio -f
 ## Key configuration constants (top of radio.py)
 
 - `STATIONS` — list of (name, stream URL) tuples; order determines cycle order.
-- `STATION_BUTTON_PIN` / `POWER_BUTTON_PIN` — BCM GPIO pin numbers.
+- `STATION_BUTTON_PIN` / `POWER_BUTTON_PIN` / `RESTART_BUTTON_PIN` — BCM GPIO pin
+  numbers.
 - `AUDIO_DEVICE` — mpv ALSA device override (e.g. `"alsa/hw:1,0"` for a USB DAC);
   `None` uses the system default.
 - `MPV_BASE_ARGS` — base mpv invocation; reconnect/caching behavior lives here.
