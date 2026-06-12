@@ -193,35 +193,28 @@ class Radio:
     # -- now playing ----------------------------------------------------
 
     def _query_now_playing(self):
-        """Return a 'icy-name: title' string from mpv's IPC socket, or None."""
+        """Return the current track title from mpv's IPC socket, or None."""
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
                 s.settimeout(0.5)
                 s.connect(MPV_SOCKET)
                 title = None
-                icy_name = None
-                for prop in ("media-title", "metadata/by-key/icy-name"):
-                    s.sendall(json.dumps(
-                        {"command": ["get_property", prop]}).encode() + b"\n")
-                    buf = b""
-                    while b"\n" not in buf:
-                        chunk = s.recv(4096)
-                        if not chunk:
-                            break
-                        buf += chunk
-                    for line in buf.decode(errors="replace").splitlines():
-                        resp = json.loads(line)
-                        if resp.get("error") == "success":
-                            if prop == "media-title":
-                                title = resp.get("data")
-                            else:
-                                icy_name = resp.get("data")
+                s.sendall(json.dumps(
+                    {"command": ["get_property", "media-title"]}).encode() + b"\n")
+                buf = b""
+                while b"\n" not in buf:
+                    chunk = s.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                for line in buf.decode(errors="replace").splitlines():
+                    resp = json.loads(line)
+                    if resp.get("error") == "success":
+                        title = resp.get("data")
         except (OSError, ValueError):
             return None
 
-        if not title:
-            return None
-        return f"{icy_name}: {title}" if icy_name else title
+        return title or None
 
     # -- display --------------------------------------------------------
 
