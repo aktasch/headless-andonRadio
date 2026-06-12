@@ -67,11 +67,15 @@ MPV_BASE_ARGS = [
 WATCHDOG_INTERVAL = 3      # seconds between mpv health checks
 RESTART_BACKOFF_MAX = 30   # cap for reconnect backoff
 
-# Optional SSD1306 OLED status display (set to False to disable entirely).
+# Optional OLED status display (set to False to disable entirely).
 ENABLE_DISPLAY = True
 DISPLAY_I2C_PORT = 1
 DISPLAY_I2C_ADDRESS = 0x3C
 DISPLAY_REFRESH_INTERVAL = 1   # seconds between display redraws
+# Controller driver: "ssd1306" or "sh1106". Many cheap 0.96" 4-pin I2C
+# boards labeled SSD1306 actually use an SH1106 controller; if the screen
+# stays blank with "ssd1306", try "sh1106".
+DISPLAY_DRIVER = "ssd1306"
 
 
 # ---------------------------------------------------------------------------
@@ -192,10 +196,13 @@ class Radio:
             if state != last_state:
                 power_text = "ON" if state[0] else "OFF"
                 station_text = state[1]
-                with canvas(device) as draw:
-                    draw.text((0, 0), power_text, font=font, fill="white")
-                    draw.text((0, 16), station_text, font=font, fill="white")
-                last_state = state
+                try:
+                    with canvas(device) as draw:
+                        draw.text((0, 0), power_text, font=font, fill="white")
+                        draw.text((0, 16), station_text, font=font, fill="white")
+                    last_state = state
+                except Exception as e:
+                    print(f"warn: display draw failed: {e}", flush=True)
             time.sleep(DISPLAY_REFRESH_INTERVAL)
 
     # -- shutdown -----------------------------------------------------------
@@ -234,10 +241,11 @@ def main():
     if ENABLE_DISPLAY:
         try:
             from luma.core.interface.serial import i2c
-            from luma.oled.device import ssd1306
+            from luma.oled.device import sh1106, ssd1306
 
+            device_cls = sh1106 if DISPLAY_DRIVER == "sh1106" else ssd1306
             serial = i2c(port=DISPLAY_I2C_PORT, address=DISPLAY_I2C_ADDRESS)
-            radio.display = ssd1306(serial)
+            radio.display = device_cls(serial)
             threading.Thread(target=radio.display_loop,
                               args=(radio.display,), daemon=True).start()
         except Exception as e:

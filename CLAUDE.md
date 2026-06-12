@@ -67,4 +67,7 @@ journalctl -u andon-radio -f
   `None` uses the system default.
 - `MPV_BASE_ARGS` — base mpv invocation; reconnect/caching behavior lives here.
 - `ENABLE_DISPLAY`, `DISPLAY_I2C_PORT`, `DISPLAY_I2C_ADDRESS`,
-  `DISPLAY_REFRESH_INTERVAL` — OLED status display settings.
+  `DISPLAY_REFRESH_INTERVAL`, `DISPLAY_DRIVER` — OLED status display settings.
+  `DISPLAY_DRIVER` is `"ssd1306"` or `"sh1106"` — many cheap 0.96" 4-pin I2C
+  boards sold as SSD1306 are actually SH1106 controllers and stay blank with
+  the wrong driver.
