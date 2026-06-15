@@ -105,6 +105,12 @@ HDMI; if you use the 3.5mm jack, switch it explicitly:
   adjust, Esc to quit). Either way, persist the change across reboots
   with `sudo alsactl store` (Raspberry Pi OS restores it at boot via the
   `alsa-restore` service).
+- radio.py also sets the mixer level itself on every service start via
+  `ALSA_VOLUME`/`ALSA_CARD`/`ALSA_CONTROL` (default: card 0, `PCM`,
+  100%), since the level restored by `alsactl` at boot can drift below
+  100%. Set `ALSA_VOLUME = None` to disable this, or adjust `ALSA_CARD`/
+  `ALSA_CONTROL` if your hardware exposes a different mixer
+  (`amixer -c <card> scontrols` to list them).
 - The Pi 3's onboard jack is serviceable but noisy. If the hum bothers
   you, a cheap USB DAC is the easy upgrade: list devices with
   `mpv --audio-device=help` and set AUDIO_DEVICE in radio.py, for

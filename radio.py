@@ -85,6 +85,14 @@ STATE_FILE = Path.home() / ".andon-radio-state.json"
 #           "alsa/hw:1,0" (USB DAC), "pulse" or "pipewire" if running.
 AUDIO_DEVICE = None
 
+# ALSA mixer level (0-100) to set at every service start, since the
+# saved mixer state can be restored below 100% on boot. Set to None to
+# leave the mixer alone. Use `amixer -c <card> scontrols` to find the
+# control name for your hardware (commonly "PCM" or "Master").
+ALSA_VOLUME = 100
+ALSA_CARD = 0
+ALSA_CONTROL = "PCM"
+
 MPV_SOCKET = "/tmp/andon-radio-mpv.sock"
 
 MPV_BASE_ARGS = [
@@ -158,6 +166,21 @@ def load_stations():
     print(f"using built-in default stations ({len(DEFAULT_STATIONS)})",
           flush=True)
     return DEFAULT_STATIONS
+
+
+def set_alsa_volume():
+    """Set the ALSA mixer to ALSA_VOLUME (best-effort, logs on failure)."""
+    if ALSA_VOLUME is None:
+        return
+    try:
+        subprocess.run(
+            ["amixer", "-c", str(ALSA_CARD), "set", ALSA_CONTROL,
+             f"{ALSA_VOLUME}%"],
+            check=True, capture_output=True,
+        )
+        print(f"set ALSA {ALSA_CONTROL} to {ALSA_VOLUME}%", flush=True)
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"warn: could not set ALSA volume: {e}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +429,7 @@ class Radio:
 def main():
     global STATIONS
     STATIONS = load_stations()
+    set_alsa_volume()
 
     radio = Radio()
 
