@@ -11,6 +11,13 @@ Playback is handled by mpv as a subprocess. The script watches mpv and
 restarts it if the stream drops while the radio is "on". The last station
 and power state survive reboots via a small state file.
 
+The station list (name + stream URL) is fetched from stations.json in
+this GitHub repo at every startup/restart, so stations can be added,
+removed, or reordered by editing that file without touching radio.py.
+If the fetch fails (e.g. no network yet at boot), the last successfully
+fetched list is used from a local cache, falling back to a small
+built-in default list as a last resort.
+
 Wiring (BCM numbering, buttons wired between the GPIO pin and GND):
   GPIO17 -> station button
   GPIO27 -> power button
@@ -39,6 +46,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 from gpiozero import Button
@@ -47,12 +55,23 @@ from gpiozero import Button
 # Configuration
 # ---------------------------------------------------------------------------
 
-STATIONS = [
+# Station list is normally fetched from STATIONS_URL at startup (see
+# load_stations() below). DEFAULT_STATIONS is only used if that fetch
+# fails and no cached copy exists yet.
+STATIONS_URL = ("https://raw.githubusercontent.com/aktasch/"
+                 "headless-andonRadio/main/stations.json")
+STATIONS_CACHE_FILE = Path.home() / ".andon-radio-stations.json"
+STATIONS_FETCH_TIMEOUT = 10  # seconds
+
+DEFAULT_STATIONS = [
     ("Thinking Frequencies", "https://streaming.live365.com/a46431"),
     ("OpenAIR",              "https://streaming.live365.com/a81044"),
     ("Backlink Broadcast",   "https://streaming.live365.com/a13541"),
-    ("Grok and Roll",        "https://streaming.live365.com/a15419"),
+    ("Improvisation Nation",  "https://streaming.live365.com/a35330"),
 ]
+
+# Populated by load_stations() in main() before Radio() is constructed.
+STATIONS = DEFAULT_STATIONS
 
 STATION_BUTTON_PIN = 17   # BCM
 POWER_BUTTON_PIN = 27     # BCM
@@ -96,6 +115,49 @@ DISPLAY_REINIT_BACKOFF = 2       # seconds to wait after a failed re-init attemp
 # stays blank with "ssd1306", try "sh1106".
 DISPLAY_DRIVER = "ssd1306"
 MAX_LINE_CHARS = 21   # approx characters that fit on one 128px line
+
+
+# ---------------------------------------------------------------------------
+# Stations
+# ---------------------------------------------------------------------------
+
+def load_stations():
+    """Return the station list as (name, url) tuples.
+
+    Fetches stations.json from STATIONS_URL. On success, caches it
+    locally. On failure (e.g. no network yet at boot), falls back to the
+    local cache, and finally to DEFAULT_STATIONS if no cache exists.
+    """
+    try:
+        with urllib.request.urlopen(STATIONS_URL,
+                                     timeout=STATIONS_FETCH_TIMEOUT) as resp:
+            data = json.loads(resp.read().decode())
+        stations = [(s["name"], s["url"]) for s in data]
+        if not stations:
+            raise ValueError("empty station list")
+        try:
+            STATIONS_CACHE_FILE.write_text(json.dumps(data))
+        except OSError as e:
+            print(f"warn: could not cache stations: {e}", flush=True)
+        print(f"loaded {len(stations)} stations from {STATIONS_URL}",
+              flush=True)
+        return stations
+    except Exception as e:
+        print(f"warn: could not fetch stations from {STATIONS_URL}: {e}",
+              flush=True)
+
+    try:
+        data = json.loads(STATIONS_CACHE_FILE.read_text())
+        stations = [(s["name"], s["url"]) for s in data]
+        if stations:
+            print(f"using cached stations ({len(stations)})", flush=True)
+            return stations
+    except Exception:
+        pass
+
+    print(f"using built-in default stations ({len(DEFAULT_STATIONS)})",
+          flush=True)
+    return DEFAULT_STATIONS
 
 
 # ---------------------------------------------------------------------------
@@ -342,6 +404,9 @@ class Radio:
 
 
 def main():
+    global STATIONS
+    STATIONS = load_stations()
+
     radio = Radio()
 
     station_btn = Button(STATION_BUTTON_PIN, pull_up=True,

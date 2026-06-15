@@ -28,15 +28,29 @@ is required, not optional.
 
 ## Stations
 
+The live station list is [stations.json](stations.json) in this repo, a
+JSON array of `{"name": ..., "url": ...}` entries:
+
 | Station | Host model | Stream |
 |---|---|---|
 | Thinking Frequencies | Claude | https://streaming.live365.com/a46431 |
 | OpenAIR | GPT | https://streaming.live365.com/a81044 |
 | Backlink Broadcast | Gemini | https://streaming.live365.com/a13541 |
-| Grok and Roll | Grok | https://streaming.live365.com/a15419 |
+| Improvisation Nation | - | https://streaming.live365.com/a35330 |
 
-Note: Grok and Roll is currently paused by Andon Labs and may stream silence.
-You can comment it out of the STATIONS list in radio.py if you prefer.
+radio.py fetches stations.json from this repo's `main` branch over HTTPS
+on every startup/restart, so add, remove, or reorder stations by editing
+that file and pushing to GitHub - no changes to radio.py or redeploying
+are needed, just `sudo systemctl restart andon-radio` (or a reboot).
+
+If the fetch fails (e.g. no network yet at boot), radio.py falls back to
+the last successfully fetched copy, cached at
+`~/.andon-radio-stations.json`, and finally to a small built-in default
+list if no cache exists yet either.
+
+Note: Andon Labs occasionally pauses stations (e.g. "Grok and Roll" may
+stream silence); just remove the entry from stations.json if that
+happens.
 
 ## Wiring (BCM pin numbers)
 
@@ -76,8 +90,21 @@ HDMI; if you use the 3.5mm jack, switch it explicitly:
 
 - Run `sudo raspi-config`, then System Options > Audio, and pick the
   headphone output (or set the default in /etc/asound.conf).
-- Set a sane level with `alsamixer` and persist it across reboots with
-  `sudo alsactl store`.
+- mpv's own volume (`--volume`, default 100) is just unity gain - the
+  real ceiling is the ALSA hardware mixer. Check and raise it with
+  `amixer`:
+
+  ```bash
+  aplay -l                  # list sound cards
+  amixer -c 0 scontrols     # list mixer controls on card 0 (e.g. PCM, Master)
+  amixer -c 0 get PCM       # check current level
+  amixer -c 0 set PCM 100%  # raise it (use Master/Speaker if that's the control)
+  ```
+
+  Or use the interactive `alsamixer` (arrow keys to select a control and
+  adjust, Esc to quit). Either way, persist the change across reboots
+  with `sudo alsactl store` (Raspberry Pi OS restores it at boot via the
+  `alsa-restore` service).
 - The Pi 3's onboard jack is serviceable but noisy. If the hum bothers
   you, a cheap USB DAC is the easy upgrade: list devices with
   `mpv --audio-device=help` and set AUDIO_DEVICE in radio.py, for
