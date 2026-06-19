@@ -86,7 +86,8 @@ VOLUME_CLK_PIN = 23       # BCM - volume KY-040 CLK
 VOLUME_DT_PIN = 24        # BCM - volume KY-040 DT
 RESTART_BUTTON_PIN = 22   # BCM - momentary button to GND
 DEBOUNCE_SECONDS = 0.05
-VOLUME_STEP = 5           # % per encoder step (clamped 0–100)
+VOLUME_STEP = 5           # % per encoder step
+VOLUME_MAX = 100          # upper limit — lower to 85–90 if crackling persists
 
 STATE_FILE = Path.home() / ".andon-radio-state.json"
 
@@ -95,13 +96,7 @@ STATE_FILE = Path.home() / ".andon-radio-state.json"
 #           "alsa/hw:1,0" (USB DAC), "pulse" or "pipewire" if running.
 AUDIO_DEVICE = None
 
-# ALSA mixer level (0-100) to set at every service start, since the
-# saved mixer state can be restored below 100% on boot. Set to None to
-# leave the mixer alone. Use `amixer -c <card> scontrols` to find the
-# control name for your hardware (commonly "PCM" or "Master").
-ALSA_VOLUME = 100
-ALSA_CARD = 0
-ALSA_CONTROL = "PCM"
+DEFAULT_VOLUME = 25   # % used on first run when no state file exists
 
 MPV_SOCKET = "/tmp/andon-radio-mpv.sock"
 
@@ -178,21 +173,6 @@ def load_stations():
     return DEFAULT_STATIONS
 
 
-def set_alsa_volume():
-    """Set the ALSA mixer to ALSA_VOLUME (best-effort, logs on failure)."""
-    if ALSA_VOLUME is None:
-        return
-    try:
-        subprocess.run(
-            ["amixer", "-c", str(ALSA_CARD), "set", ALSA_CONTROL,
-             f"{ALSA_VOLUME}%"],
-            check=True, capture_output=True,
-        )
-        print(f"set ALSA {ALSA_CONTROL} to {ALSA_VOLUME}%", flush=True)
-    except (OSError, subprocess.CalledProcessError) as e:
-        print(f"warn: could not set ALSA volume: {e}", flush=True)
-
-
 # ---------------------------------------------------------------------------
 # Player
 # ---------------------------------------------------------------------------
@@ -203,6 +183,7 @@ class Radio:
         self.proc = None
         self.powered = True
         self.station_idx = 0
+        self.volume = DEFAULT_VOLUME
         self.backoff = 1
         self.display = None
         self._load_state()
@@ -214,13 +195,17 @@ class Radio:
             data = json.loads(STATE_FILE.read_text())
             self.station_idx = int(data.get("station", 0)) % len(STATIONS)
             self.powered = bool(data.get("powered", True))
+            self.volume = max(0, min(VOLUME_MAX, int(data.get("volume", DEFAULT_VOLUME))))
         except Exception:
             pass
 
     def _save_state(self):
         try:
-            STATE_FILE.write_text(json.dumps(
-                {"station": self.station_idx, "powered": self.powered}))
+            STATE_FILE.write_text(json.dumps({
+                "station": self.station_idx,
+                "powered": self.powered,
+                "volume": self.volume,
+            }))
         except Exception as e:
             print(f"warn: could not save state: {e}", flush=True)
 
@@ -231,6 +216,7 @@ class Radio:
         args = list(MPV_BASE_ARGS)
         if AUDIO_DEVICE:
             args.append(f"--audio-device={AUDIO_DEVICE}")
+        args.append(f"--volume={self.volume}")
         args.append(url)
         print(f"playing: {name} ({url})", flush=True)
         self.proc = subprocess.Popen(
@@ -275,22 +261,27 @@ class Radio:
                 print("power: off", flush=True)
                 self._stop_mpv()
 
-    def _set_mpv_volume(self, delta):
-        """Adjust mpv volume by delta % via IPC socket (best-effort)."""
+    def _change_volume(self, delta):
+        """Adjust volume by delta %, persist it, and tell mpv via IPC."""
+        with self.lock:
+            self.volume = max(0, min(VOLUME_MAX, self.volume + delta))
+            new_vol = self.volume
+            self._save_state()
+        print(f"volume: {new_vol}%", flush=True)
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
                 s.settimeout(0.5)
                 s.connect(MPV_SOCKET)
                 s.sendall(json.dumps(
-                    {"command": ["add", "volume", delta]}).encode() + b"\n")
+                    {"command": ["set_property", "volume", new_vol]}).encode() + b"\n")
         except OSError:
             pass
 
     def volume_up(self):
-        self._set_mpv_volume(VOLUME_STEP)
+        self._change_volume(VOLUME_STEP)
 
     def volume_down(self):
-        self._set_mpv_volume(-VOLUME_STEP)
+        self._change_volume(-VOLUME_STEP)
 
     @staticmethod
     def restart_service():
@@ -456,7 +447,6 @@ class Radio:
 def main():
     global STATIONS
     STATIONS = load_stations()
-    set_alsa_volume()
 
     radio = Radio()
 
