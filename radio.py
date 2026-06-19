@@ -261,9 +261,9 @@ class Radio:
 
     # -- button handlers ----------------------------------------------------
 
-    def next_station(self):
+    def _switch_station(self, delta):
         with self.lock:
-            self.station_idx = (self.station_idx + 1) % len(STATIONS)
+            self.station_idx = (self.station_idx + delta) % len(STATIONS)
             self.backoff = 1
             self._save_state()
             if self.powered:
@@ -272,6 +272,12 @@ class Radio:
             else:
                 print(f"selected (off): {STATIONS[self.station_idx][0]}",
                       flush=True)
+
+    def next_station(self):
+        self._switch_station(1)
+
+    def prev_station(self):
+        self._switch_station(-1)
 
     def toggle_power(self):
         with self.lock:
@@ -478,7 +484,7 @@ def main():
     encoder = RotaryEncoder(ENCODER_CLK_PIN, ENCODER_DT_PIN,
                             bounce_time=DEBOUNCE_SECONDS, wrap=True)
     encoder.when_rotated_clockwise = radio.next_station
-    encoder.when_rotated_counter_clockwise = radio.next_station
+    encoder.when_rotated_counter_clockwise = radio.prev_station
     channel_btn = Button(ENCODER_SW_PIN, pull_up=True,
                          bounce_time=DEBOUNCE_SECONDS)
     channel_btn.when_pressed = radio.restart_service
