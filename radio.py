@@ -2,10 +2,9 @@
 """
 Headless Raspberry Pi radio player for Andon FM (https://andonlabs.com/radio).
 
-Three GPIO buttons:
-  - STATION button: cycles through the four stations
-  - POWER button:   toggles playback on/off
-  - RESTART button: restarts the andon-radio systemd service
+Controls:
+  - KY-040 rotary encoder: rotate to cycle stations, push to toggle power
+  - RESTART button (momentary, to GND): restarts the andon-radio systemd service
 
 Playback is handled by mpv as a subprocess. The script watches mpv and
 restarts it if the stream drops while the radio is "on". The last station
@@ -18,11 +17,14 @@ If the fetch fails (e.g. no network yet at boot), the last successfully
 fetched list is used from a local cache, falling back to a small
 built-in default list as a last resort.
 
-Wiring (BCM numbering, buttons wired between the GPIO pin and GND):
-  GPIO17 -> station button
-  GPIO27 -> power button
-  GPIO22 -> restart button
-Internal pull-ups are enabled, no external resistors needed.
+Wiring (BCM numbering):
+  KY-040 CLK -> GPIO17
+  KY-040 DT  -> GPIO18
+  KY-040 SW  -> GPIO27  (push button, to GND)
+  KY-040 +   -> 3.3V
+  KY-040 GND -> GND
+  Restart button -> GPIO22 to GND
+Internal pull-ups are enabled on all pins; no external resistors needed.
 
 The restart button runs `sudo systemctl restart andon-radio`. This requires
 a passwordless sudo rule for the service user, e.g. in
@@ -49,7 +51,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from gpiozero import Button
+from gpiozero import Button, RotaryEncoder
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -73,9 +75,10 @@ DEFAULT_STATIONS = [
 # Populated by load_stations() in main() before Radio() is constructed.
 STATIONS = DEFAULT_STATIONS
 
-STATION_BUTTON_PIN = 17   # BCM
-POWER_BUTTON_PIN = 27     # BCM
-RESTART_BUTTON_PIN = 22   # BCM
+ENCODER_CLK_PIN = 17      # BCM - KY-040 CLK
+ENCODER_DT_PIN = 18       # BCM - KY-040 DT
+ENCODER_SW_PIN = 27       # BCM - KY-040 SW (push)
+RESTART_BUTTON_PIN = 22   # BCM - momentary button to GND
 DEBOUNCE_SECONDS = 0.05
 
 STATE_FILE = Path.home() / ".andon-radio-state.json"
@@ -433,14 +436,15 @@ def main():
 
     radio = Radio()
 
-    station_btn = Button(STATION_BUTTON_PIN, pull_up=True,
-                         bounce_time=DEBOUNCE_SECONDS)
-    power_btn = Button(POWER_BUTTON_PIN, pull_up=True,
+    encoder = RotaryEncoder(ENCODER_CLK_PIN, ENCODER_DT_PIN,
+                            bounce_time=DEBOUNCE_SECONDS, wrap=True)
+    encoder.when_rotated_clockwise = radio.next_station
+    encoder.when_rotated_counter_clockwise = radio.next_station
+    power_btn = Button(ENCODER_SW_PIN, pull_up=True,
                        bounce_time=DEBOUNCE_SECONDS)
+    power_btn.when_pressed = radio.toggle_power
     restart_btn = Button(RESTART_BUTTON_PIN, pull_up=True,
                          bounce_time=DEBOUNCE_SECONDS)
-    station_btn.when_pressed = radio.next_station
-    power_btn.when_pressed = radio.toggle_power
     restart_btn.when_pressed = radio.restart_service
 
     signal.signal(signal.SIGTERM, radio.shutdown)
@@ -460,9 +464,8 @@ def main():
         except Exception as e:
             print(f"warn: display unavailable: {e}", flush=True)
 
-    print("andon-radio ready. station button: GPIO"
-          f"{STATION_BUTTON_PIN}, power button: GPIO{POWER_BUTTON_PIN}, "
-          f"restart button: GPIO{RESTART_BUTTON_PIN}",
+    print(f"andon-radio ready. encoder CLK/DT: GPIO{ENCODER_CLK_PIN}/{ENCODER_DT_PIN}, "
+          f"power push: GPIO{ENCODER_SW_PIN}, restart: GPIO{RESTART_BUTTON_PIN}",
           flush=True)
     signal.pause()
 
