@@ -20,7 +20,7 @@ built-in default list as a last resort.
 Wiring (BCM numbering):
   Station encoder CLK -> GPIO17
   Station encoder DT  -> GPIO18
-  Station encoder SW  -> not connected (push ignored)
+  Station encoder SW  -> GPIO25  (push = service restart, to GND)
   Station encoder +   -> 3.3V
   Station encoder GND -> GND
   Volume encoder CLK  -> GPIO23
@@ -82,6 +82,7 @@ STATIONS = DEFAULT_STATIONS
 
 ENCODER_CLK_PIN = 17      # BCM - station KY-040 CLK
 ENCODER_DT_PIN = 18       # BCM - station KY-040 DT
+ENCODER_SW_PIN = 25       # BCM - station KY-040 SW (push = service restart)
 VOLUME_CLK_PIN = 23       # BCM - volume KY-040 CLK
 VOLUME_DT_PIN = 24        # BCM - volume KY-040 DT
 VOLUME_SW_PIN = 27        # BCM - volume KY-040 SW (push = power toggle)
@@ -478,6 +479,9 @@ def main():
                             bounce_time=DEBOUNCE_SECONDS, wrap=True)
     encoder.when_rotated_clockwise = radio.next_station
     encoder.when_rotated_counter_clockwise = radio.next_station
+    channel_btn = Button(ENCODER_SW_PIN, pull_up=True,
+                         bounce_time=DEBOUNCE_SECONDS)
+    channel_btn.when_pressed = radio.restart_service
     vol_encoder = RotaryEncoder(VOLUME_CLK_PIN, VOLUME_DT_PIN,
                                 bounce_time=DEBOUNCE_SECONDS, wrap=False)
     vol_encoder.when_rotated_clockwise = radio.volume_up
@@ -506,10 +510,11 @@ def main():
         except Exception as e:
             print(f"warn: display unavailable: {e}", flush=True)
 
-    print(f"andon-radio ready. station encoder: GPIO{ENCODER_CLK_PIN}/{ENCODER_DT_PIN}, "
-          f"power push: GPIO{VOLUME_SW_PIN}, "
-          f"volume encoder: GPIO{VOLUME_CLK_PIN}/{VOLUME_DT_PIN}, "
-          f"restart: GPIO{RESTART_BUTTON_PIN}",
+    print(f"andon-radio ready. station encoder: GPIO{ENCODER_CLK_PIN}/{ENCODER_DT_PIN} "
+          f"(push restart: GPIO{ENCODER_SW_PIN}), "
+          f"volume encoder: GPIO{VOLUME_CLK_PIN}/{VOLUME_DT_PIN} "
+          f"(push power: GPIO{VOLUME_SW_PIN}), "
+          f"restart btn: GPIO{RESTART_BUTTON_PIN}",
           flush=True)
     signal.pause()
 
