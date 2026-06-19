@@ -20,11 +20,12 @@ built-in default list as a last resort.
 Wiring (BCM numbering):
   Station encoder CLK -> GPIO17
   Station encoder DT  -> GPIO18
-  Station encoder SW  -> GPIO27  (push = power toggle, to GND)
+  Station encoder SW  -> not connected (push ignored)
   Station encoder +   -> 3.3V
   Station encoder GND -> GND
   Volume encoder CLK  -> GPIO23
   Volume encoder DT   -> GPIO24
+  Volume encoder SW   -> GPIO27  (push = power toggle, to GND)
   Volume encoder +    -> 3.3V
   Volume encoder GND  -> GND
   Restart button      -> GPIO22 to GND
@@ -81,9 +82,9 @@ STATIONS = DEFAULT_STATIONS
 
 ENCODER_CLK_PIN = 17      # BCM - station KY-040 CLK
 ENCODER_DT_PIN = 18       # BCM - station KY-040 DT
-ENCODER_SW_PIN = 27       # BCM - station KY-040 SW (push = power toggle)
 VOLUME_CLK_PIN = 23       # BCM - volume KY-040 CLK
 VOLUME_DT_PIN = 24        # BCM - volume KY-040 DT
+VOLUME_SW_PIN = 27        # BCM - volume KY-040 SW (push = power toggle)
 RESTART_BUTTON_PIN = 22   # BCM - momentary button to GND
 DEBOUNCE_SECONDS = 0.05
 VOLUME_STEP = 5           # % per encoder step
@@ -477,13 +478,13 @@ def main():
                             bounce_time=DEBOUNCE_SECONDS, wrap=True)
     encoder.when_rotated_clockwise = radio.next_station
     encoder.when_rotated_counter_clockwise = radio.next_station
-    power_btn = Button(ENCODER_SW_PIN, pull_up=True,
-                       bounce_time=DEBOUNCE_SECONDS)
-    power_btn.when_pressed = radio.toggle_power
     vol_encoder = RotaryEncoder(VOLUME_CLK_PIN, VOLUME_DT_PIN,
                                 bounce_time=DEBOUNCE_SECONDS, wrap=False)
     vol_encoder.when_rotated_clockwise = radio.volume_up
     vol_encoder.when_rotated_counter_clockwise = radio.volume_down
+    power_btn = Button(VOLUME_SW_PIN, pull_up=True,
+                       bounce_time=DEBOUNCE_SECONDS)
+    power_btn.when_pressed = radio.toggle_power
     restart_btn = Button(RESTART_BUTTON_PIN, pull_up=True,
                          bounce_time=DEBOUNCE_SECONDS)
     restart_btn.when_pressed = radio.restart_service
@@ -506,7 +507,7 @@ def main():
             print(f"warn: display unavailable: {e}", flush=True)
 
     print(f"andon-radio ready. station encoder: GPIO{ENCODER_CLK_PIN}/{ENCODER_DT_PIN}, "
-          f"power push: GPIO{ENCODER_SW_PIN}, "
+          f"power push: GPIO{VOLUME_SW_PIN}, "
           f"volume encoder: GPIO{VOLUME_CLK_PIN}/{VOLUME_DT_PIN}, "
           f"restart: GPIO{RESTART_BUTTON_PIN}",
           flush=True)
