@@ -3,5 +3,8 @@
   {"name": "OpenAIR", "url": "https://streaming.live365.com/a81044"},
   {"name": "Backlink Broadcast", "url": "https://streaming.live365.com/a13541"},
   {"name": "Improvisation Nation", "url": "https://streaming.live365.com/a35330"},
-  {"name": "Rad Radio CCM", "url": "https://streaming.live365.com/a25604"}
+  {"name": "Rad Radio CCM", "url": "https://streaming.live365.com/a25604"},
+  {"name": "Hits 106.1 Seattle", "url": "https://stream.revma.ihrhls.com/zc4257/hls.m3u8"},
+  {"name": "KEXP 90.3","url": "https://kexp-mp3-128.streamguys1.com/kexp128.mp3"},
+  {"name": "KUOW 94.9","url": "https://kuow-app.streamguys1.com/kuow1"}
 ]
