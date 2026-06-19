@@ -98,6 +98,13 @@ AUDIO_DEVICE = None
 
 DEFAULT_VOLUME = 25   # % used on first run when no state file exists
 
+# ALSA hardware mixer is forced to 100% at startup so mpv volume is the
+# sole control. Set ALSA_VOLUME to None to skip. Use
+# `amixer -c <card> scontrols` to find the right control name.
+ALSA_VOLUME = 100
+ALSA_CARD = 0
+ALSA_CONTROL = "PCM"
+
 MPV_SOCKET = "/tmp/andon-radio-mpv.sock"
 
 MPV_BASE_ARGS = [
@@ -171,6 +178,21 @@ def load_stations():
     print(f"using built-in default stations ({len(DEFAULT_STATIONS)})",
           flush=True)
     return DEFAULT_STATIONS
+
+
+def set_alsa_volume():
+    """Force the ALSA hardware mixer to ALSA_VOLUME so mpv is the sole control."""
+    if ALSA_VOLUME is None:
+        return
+    try:
+        subprocess.run(
+            ["amixer", "-c", str(ALSA_CARD), "set", ALSA_CONTROL,
+             f"{ALSA_VOLUME}%"],
+            check=True, capture_output=True,
+        )
+        print(f"set ALSA {ALSA_CONTROL} to {ALSA_VOLUME}%", flush=True)
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"warn: could not set ALSA volume: {e}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -447,6 +469,7 @@ class Radio:
 def main():
     global STATIONS
     STATIONS = load_stations()
+    set_alsa_volume()
 
     radio = Radio()
 
