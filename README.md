@@ -1,7 +1,30 @@
-# Andon FM Raspberry Pi Radio
+# Andon FM Radio
 
-Headless radio player that streams the four AI-run Andon FM stations
-(https://andonlabs.com/radio) with two physical buttons.
+Headless Raspberry Pi radio player + Android companion app for the AI-run
+[Andon FM stations](https://andonlabs.com/radio).
+
+## Repo layout
+
+```text
+headless-andonRadio/
+├── stations.json        # shared station list — Pi and Android both use this
+├── pi/                  # Raspberry Pi player (systemd service + mpv)
+│   ├── radio.py
+│   ├── onboarding.py    # planned: WiFi captive-portal setup
+│   ├── andon-radio.service
+│   └── andon-onboarding.service
+├── android/             # Android Studio project (standalone player + Pi remote)
+│   ├── app/src/main/java/com/andonlabs/radio/
+│   └── ...
+└── hardware/            # 3-D printable enclosure files
+    ├── retro_radio_case.stl
+    └── retro_radio_backplate.stl
+```
+
+See `pi/` for Raspberry Pi setup instructions and `android/` to open the app
+in Android Studio.
+
+---
 
 Target hardware: Raspberry Pi 3 (works on any Pi, including Pi 5).
 
@@ -71,10 +94,10 @@ sudo apt update
 sudo apt install -y mpv python3-gpiozero
 
 mkdir -p /home/aktasch/andon-radio
-cp radio.py /home/aktasch/andon-radio/
+cp pi/radio.py /home/aktasch/andon-radio/
 chmod +x /home/aktasch/andon-radio/radio.py
 
-sudo cp andon-radio.service /etc/systemd/system/
+sudo cp pi/andon-radio.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now andon-radio
 ```
